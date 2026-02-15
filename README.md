@@ -5,7 +5,7 @@ A Swift parser library for parsing Instagram/Threads `bloks_payload` fields.
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Faporat%2FBloksParser%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/aporat/BloksParser)
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Faporat%2FBloksParser%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/aporat/BloksParser)
 ![GitHub Actions Workflow Status](https://github.com/aporat/BloksParser/actions/workflows/ci.yml/badge.svg)
-[![codecov](https://codecov.io/github/aporat/BloksParser/graph/badge.svg?token=OHF9AE0KMC)](https://codecov.io/github/aporat/BloksParser)
+[![codecov](https://codecov.io/github/aporat/BloksParser/graph/badge.svg?token=S9NKF7NHXT)](https://codecov.io/github/aporat/BloksParser)
 
 ## Overview
 
