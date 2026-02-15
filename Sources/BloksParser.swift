@@ -33,6 +33,35 @@ public enum BloksValue: Equatable, Sendable {
     }
 }
 
+extension BloksValue {
+    
+    /// Recursively searches the tree for the first `bk.action.map.Make` whose keys
+    /// array contains the given key, and returns it as a `[String: BloksValue]`.
+    /// Returns `nil` if no matching map is found.
+    public func findMap(containingKey targetKey: String) -> [String: BloksValue]? {
+        guard case .blok(let name, let args, _) = self else { return nil }
+        
+        // If this node is a map.Make, try to decode it and check for the key.
+        if name == "bk.action.map.Make", args.count == 2,
+           let keysArgs = args[0].blokArgs,
+           let valuesArgs = args[1].blokArgs,
+           keysArgs.count == valuesArgs.count {
+            
+            var dict: [String: BloksValue] = [:]
+            for (k, v) in zip(keysArgs, valuesArgs) {
+                if case .string(let keyStr) = k { dict[keyStr] = v }
+            }
+            if dict[targetKey] != nil { return dict }
+        }
+        
+        // Otherwise recurse into all children.
+        for arg in args {
+            if let found = arg.findMap(containingKey: targetKey) { return found }
+        }
+        return nil
+    }
+}
+
 // MARK: - CustomStringConvertible
 
 extension BloksValue: CustomStringConvertible {
