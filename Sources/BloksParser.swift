@@ -1,7 +1,7 @@
 import Foundation
 
 /// Represents a parsed bloks value
-public enum BloksValue: Equatable, Sendable {
+public enum BloksValue: Hashable, Sendable {
     case null
     case bool(Bool)
     case number(Double)
@@ -80,6 +80,9 @@ extension BloksValue: CustomStringConvertible {
             return "\"\(value)\""
         case .blok(let name, let args, let isLocal):
             let prefix = isLocal ? "#" : ""
+            if args.isEmpty {
+                return "(\(prefix)\(name))"
+            }
             let argsStr = args.map { $0.description }.joined(separator: ", ")
             return "(\(prefix)\(name), \(argsStr))"
         }
@@ -225,12 +228,10 @@ public struct BasicProcessors {
 // MARK: - Bloks Parser
 
 /// Parser for Instagram/Threads bloks payloads
-public final class BloksParser: @unchecked Sendable {
-    private var input: String
-    private var index: String.Index
-    private var processors: [String: BlokProcessor]
-    private var fallbackProcessor: BlokProcessor
-    
+public final class BloksParser: Sendable {
+    private let processors: [String: BlokProcessor]
+    private let fallbackProcessor: BlokProcessor
+
     /// Create a new parser with optional processors
     /// - Parameters:
     ///   - processors: Dictionary mapping blok names to processor functions
@@ -239,8 +240,6 @@ public final class BloksParser: @unchecked Sendable {
         processors: [String: BlokProcessor] = [:],
         fallbackProcessor: @escaping BlokProcessor = defaultProcessor
     ) {
-        self.input = ""
-        self.index = "".startIndex
         self.processors = processors
         self.fallbackProcessor = fallbackProcessor
     }
@@ -251,190 +250,192 @@ public final class BloksParser: @unchecked Sendable {
     }
     
     // MARK: - Public API
-    
+
     /// Parse a bloks payload string
     /// - Parameter payload: The bloks payload string to parse
     /// - Returns: The parsed BloksValue
     public func parse(_ payload: String) throws -> BloksValue {
-        self.input = payload
-        self.index = payload.startIndex
-        
-        skipWhitespace()
-        let result = try parseValue()
-        skipWhitespace()
-        
+        var state = ParseState(input: payload)
+
+        state.skipWhitespace()
+        let result = try parseValue(&state)
+        state.skipWhitespace()
+
         // Ensure we've consumed all input
-        if index < input.endIndex {
-            throw BloksParserError.unexpectedCharacter(input[index], position: currentPosition)
+        if state.index < state.input.endIndex {
+            throw BloksParserError.unexpectedCharacter(state.input[state.index], position: state.currentPosition)
         }
-        
+
         return result
     }
-    
-    // MARK: - Private Parsing Methods
-    
-    private var currentPosition: Int {
-        input.distance(from: input.startIndex, to: index)
-    }
-    
-    private var currentChar: Character? {
-        index < input.endIndex ? input[index] : nil
-    }
-    
-    private func advance() {
-        if index < input.endIndex {
-            index = input.index(after: index)
+
+    // MARK: - Parse State
+
+    private struct ParseState {
+        let input: String
+        var index: String.Index
+
+        init(input: String) {
+            self.input = input
+            self.index = input.startIndex
         }
-    }
-    
-    private func peek(offset: Int = 0) -> Character? {
-        var i = index
-        for _ in 0..<offset {
-            guard i < input.endIndex else { return nil }
-            i = input.index(after: i)
+
+        var currentPosition: Int {
+            input.distance(from: input.startIndex, to: index)
         }
-        return i < input.endIndex ? input[i] : nil
-    }
-    
-    private func skipWhitespace() {
-        while let char = currentChar, char.isWhitespace {
+
+        var currentChar: Character? {
+            index < input.endIndex ? input[index] : nil
+        }
+
+        mutating func advance() {
+            if index < input.endIndex {
+                index = input.index(after: index)
+            }
+        }
+
+        mutating func skipWhitespace() {
+            while let char = currentChar, char.isWhitespace {
+                advance()
+            }
+        }
+
+        mutating func expect(_ char: Character) throws {
+            guard let current = currentChar else {
+                throw BloksParserError.expectedCharacter(char, got: nil, position: currentPosition)
+            }
+            guard current == char else {
+                throw BloksParserError.expectedCharacter(char, got: current, position: currentPosition)
+            }
             advance()
         }
     }
-    
-    private func expect(_ char: Character) throws {
-        guard let current = currentChar else {
-            throw BloksParserError.expectedCharacter(char, got: nil, position: currentPosition)
-        }
-        guard current == char else {
-            throw BloksParserError.expectedCharacter(char, got: current, position: currentPosition)
-        }
-        advance()
-    }
-    
-    private func parseValue() throws -> BloksValue {
-        skipWhitespace()
-        
-        guard let char = currentChar else {
+
+    // MARK: - Private Parsing Methods
+
+    private func parseValue(_ state: inout ParseState) throws -> BloksValue {
+        state.skipWhitespace()
+
+        guard let char = state.currentChar else {
             throw BloksParserError.unexpectedEndOfInput
         }
-        
+
         switch char {
         case "(":
-            return try parseBlok()
+            return try parseBlok(&state)
         case "\"":
-            return try parseString()
+            return try parseString(&state)
         case "t", "f":
-            return try parseBoolean()
+            return try parseBoolean(&state)
         case "n":
-            return try parseNull()
+            return try parseNull(&state)
         case "-", "+", "0"..."9":
-            return try parseNumber()
+            return try parseNumber(&state)
         default:
-            throw BloksParserError.unexpectedCharacter(char, position: currentPosition)
+            throw BloksParserError.unexpectedCharacter(char, position: state.currentPosition)
         }
     }
-    
-    private func parseBlok() throws -> BloksValue {
-        let startPos = currentPosition
-        try expect("(")
-        skipWhitespace()
-        
+
+    private func parseBlok(_ state: inout ParseState) throws -> BloksValue {
+        let startPos = state.currentPosition
+        try state.expect("(")
+        state.skipWhitespace()
+
         // Check for local blok (starts with #)
         let isLocal: Bool
-        if currentChar == "#" {
+        if state.currentChar == "#" {
             isLocal = true
-            advance()
+            state.advance()
         } else {
             isLocal = false
         }
-        
+
         // Parse the blok name
-        let name = try parseBlokName(isLocal: isLocal)
+        let name = parseBlokName(&state, isLocal: isLocal)
         guard !name.isEmpty else {
             throw BloksParserError.invalidBlokName(position: startPos)
         }
-        
-        skipWhitespace()
-        
+
+        state.skipWhitespace()
+
         // Parse arguments
         var args: [BloksValue] = []
-        
-        while currentChar == "," {
-            advance() // consume comma
-            skipWhitespace()
-            
+
+        while state.currentChar == "," {
+            state.advance() // consume comma
+            state.skipWhitespace()
+
             // Handle trailing comma
-            if currentChar == ")" {
+            if state.currentChar == ")" {
                 break
             }
-            
-            let arg = try parseValue()
+
+            let arg = try parseValue(&state)
             args.append(arg)
-            skipWhitespace()
+            state.skipWhitespace()
         }
-        
-        try expect(")")
-        
+
+        try state.expect(")")
+
         // Apply processor if available
         if let processor = processors[name] {
             return processor(name, args, isLocal)
         }
-        
+
         // Check for fallback processor (using "@" key convention from original)
         if let fallback = processors["@"] {
             return fallback(name, args, isLocal)
         }
-        
+
         return fallbackProcessor(name, args, isLocal)
     }
-    
-    private func parseBlokName(isLocal: Bool) throws -> String {
+
+    private func parseBlokName(_ state: inout ParseState, isLocal: Bool) -> String {
         var name = ""
-        
+
         if isLocal {
             // Local blok names can contain alphanumeric, hyphens, and colons
-            while let char = currentChar {
+            while let char = state.currentChar {
                 if char.isLetter || char.isNumber || char == "_" || char == "-" || char == ":" {
                     name.append(char)
-                    advance()
+                    state.advance()
                 } else {
                     break
                 }
             }
         } else {
             // Regular blok names are dot-separated identifiers
-            while let char = currentChar {
+            while let char = state.currentChar {
                 if char.isLetter || char.isNumber || char == "_" || char == "." {
                     name.append(char)
-                    advance()
+                    state.advance()
                 } else {
                     break
                 }
             }
         }
-        
+
         return name
     }
-    
-    private func parseString() throws -> BloksValue {
-        let startPos = currentPosition
-        try expect("\"")
-        
+
+    private func parseString(_ state: inout ParseState) throws -> BloksValue {
+        let startPos = state.currentPosition
+        try state.expect("\"")
+
         var result = ""
-        
-        while let char = currentChar {
+
+        while let char = state.currentChar {
             if char == "\"" {
-                advance()
+                state.advance()
                 return .string(result)
             }
-            
+
             if char == "\\" {
-                advance()
-                guard let escaped = currentChar else {
+                state.advance()
+                guard let escaped = state.currentChar else {
                     throw BloksParserError.unterminatedString(position: startPos)
                 }
-                
+
                 switch escaped {
                 case "\"":
                     result.append("\"")
@@ -452,18 +453,18 @@ public final class BloksParser: @unchecked Sendable {
                     result.append("\n")
                 case "u":
                     // Parse unicode escape \uXXXX
-                    advance()
+                    state.advance()
                     var hex = ""
                     for _ in 0..<4 {
-                        guard let h = currentChar, h.isHexDigit else {
-                            throw BloksParserError.invalidEscapeSequence("\\u\(hex)", position: currentPosition)
+                        guard let h = state.currentChar, h.isHexDigit else {
+                            throw BloksParserError.invalidEscapeSequence("\\u\(hex)", position: state.currentPosition)
                         }
                         hex.append(h)
-                        advance()
+                        state.advance()
                     }
                     guard let codePoint = UInt32(hex, radix: 16),
                           let scalar = Unicode.Scalar(codePoint) else {
-                        throw BloksParserError.invalidEscapeSequence("\\u\(hex)", position: currentPosition)
+                        throw BloksParserError.invalidEscapeSequence("\\u\(hex)", position: state.currentPosition)
                     }
                     result.append(Character(scalar))
                     continue // Skip the advance() at the end since we already advanced
@@ -471,90 +472,90 @@ public final class BloksParser: @unchecked Sendable {
                     // For other escapes, just include the character
                     result.append(escaped)
                 }
-                advance()
+                state.advance()
             } else {
                 result.append(char)
-                advance()
+                state.advance()
             }
         }
-        
+
         throw BloksParserError.unterminatedString(position: startPos)
     }
-    
-    private func parseNumber() throws -> BloksValue {
-        let startPos = currentPosition
+
+    private func parseNumber(_ state: inout ParseState) throws -> BloksValue {
+        let startPos = state.currentPosition
         var numStr = ""
-        
+
         // Optional sign
-        if currentChar == "+" || currentChar == "-" {
-            numStr.append(currentChar!)
-            advance()
+        if state.currentChar == "+" || state.currentChar == "-" {
+            numStr.append(state.currentChar!)
+            state.advance()
         }
-        
+
         // Integer part
-        while let char = currentChar, char.isNumber {
+        while let char = state.currentChar, char.isNumber {
             numStr.append(char)
-            advance()
+            state.advance()
         }
-        
+
         // Decimal part
-        if currentChar == "." {
+        if state.currentChar == "." {
             numStr.append(".")
-            advance()
-            while let char = currentChar, char.isNumber {
+            state.advance()
+            while let char = state.currentChar, char.isNumber {
                 numStr.append(char)
-                advance()
+                state.advance()
             }
         }
-        
+
         // Exponent part
-        if currentChar == "e" || currentChar == "E" {
-            numStr.append(currentChar!)
-            advance()
-            
-            if currentChar == "+" || currentChar == "-" {
-                numStr.append(currentChar!)
-                advance()
+        if state.currentChar == "e" || state.currentChar == "E" {
+            numStr.append(state.currentChar!)
+            state.advance()
+
+            if state.currentChar == "+" || state.currentChar == "-" {
+                numStr.append(state.currentChar!)
+                state.advance()
             }
-            
-            while let char = currentChar, char.isNumber {
+
+            while let char = state.currentChar, char.isNumber {
                 numStr.append(char)
-                advance()
+                state.advance()
             }
         }
-        
+
         guard let value = Double(numStr) else {
             throw BloksParserError.invalidNumber(numStr, position: startPos)
         }
-        
+
         return .number(value)
     }
-    
-    private func parseBoolean() throws -> BloksValue {
-        let startPos = currentPosition
-        
-        if input[index...].hasPrefix("true") {
-            for _ in 0..<4 { advance() }
+
+    private func parseBoolean(_ state: inout ParseState) throws -> BloksValue {
+        let startPos = state.currentPosition
+
+        if state.input[state.index...].hasPrefix("true") {
+            for _ in 0..<4 { state.advance() }
             return .bool(true)
         }
-        
-        if input[index...].hasPrefix("false") {
-            for _ in 0..<5 { advance() }
+
+        if state.input[state.index...].hasPrefix("false") {
+            for _ in 0..<5 { state.advance() }
             return .bool(false)
         }
-        
-        throw BloksParserError.unexpectedCharacter(currentChar ?? " ", position: startPos)
+
+        throw BloksParserError.unexpectedCharacter(state.currentChar ?? " ", position: startPos)
     }
-    
-    private func parseNull() throws -> BloksValue {
-        let startPos = currentPosition
-        
-        if input[index...].hasPrefix("null") {
-            for _ in 0..<4 { advance() }
+
+    private func parseNull(_ state: inout ParseState) throws -> BloksValue {
+        let startPos = state.currentPosition
+
+        if state.input[state.index...].hasPrefix("null") {
+            for _ in 0..<4 { state.advance() }
             return .null
         }
-        
-        throw BloksParserError.unexpectedCharacter(currentChar ?? " ", position: startPos)
+
+        throw BloksParserError.unexpectedCharacter(state.currentChar ?? " ", position: startPos)
     }
 }
 

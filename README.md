@@ -19,7 +19,7 @@ Add the following to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/BloksParser.git", from: "1.0.0")
+    .package(url: "https://github.com/aporat/BloksParser.git", from: "1.0.0")
 ]
 ```
 
@@ -218,7 +218,7 @@ public enum BloksParserError: Error {
 
 ## Thread Safety
 
-`BloksParser` is marked as `@unchecked Sendable` and `BloksValue` is `Sendable`. Each call to `parse()` uses independent state, making the parser safe to use across threads.
+`BloksParser` conforms to `Sendable` and `BloksValue` is `Sendable`. Each call to `parse()` uses independent local state, making the parser safe to use across threads.
 
 ## License
 
