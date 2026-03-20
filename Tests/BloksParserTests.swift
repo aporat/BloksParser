@@ -1,67 +1,68 @@
-import XCTest
+import Foundation
+import Testing
 @testable import BloksParser
 
-final class BloksParserTests: XCTestCase {
+struct BloksParserTests {
     
     // MARK: - Basic Parsing Tests
     
-    func testParseSimpleBlok() throws {
+    @Test func parseSimpleBlok() throws {
         let parser = BloksParser()
         let result = try parser.parse("(bk.action.test)")
         
-        XCTAssertEqual(result.blokName, "bk.action.test")
-        XCTAssertEqual(result.blokArgs?.count, 0)
-        XCTAssertFalse(result.isLocalBlok)
+        #expect(result.blokName == "bk.action.test")
+        #expect(result.blokArgs?.count == 0)
+        #expect(result.isLocalBlok == false)
     }
     
-    func testParseBlokWithStringArg() throws {
+    @Test func parseBlokWithStringArg() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(bk.action.test, "hello")"#)
         
-        XCTAssertEqual(result.blokName, "bk.action.test")
-        XCTAssertEqual(result.blokArgs?.count, 1)
+        #expect(result.blokName == "bk.action.test")
+        #expect(result.blokArgs?.count == 1)
         
-        if case .string(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, "hello")
-        } else {
-            XCTFail("Expected string argument")
+        guard case .string(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected string argument")
+            return
         }
+        #expect(value == "hello")
     }
     
-    func testParseBlokWithMultipleArgs() throws {
+    @Test func parseBlokWithMultipleArgs() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(bk.action.test, "hello", 42, true, null)"#)
         
-        XCTAssertEqual(result.blokName, "bk.action.test")
-        XCTAssertEqual(result.blokArgs?.count, 4)
+        #expect(result.blokName == "bk.action.test")
+        #expect(result.blokArgs?.count == 4)
         
         guard let args = result.blokArgs else {
-            XCTFail("Expected args")
+            Issue.record("Expected args")
             return
         }
         
-        if case .string(let value) = args[0] {
-            XCTAssertEqual(value, "hello")
-        } else {
-            XCTFail("Expected string")
+        guard case .string(let strValue) = args[0] else {
+            Issue.record("Expected string")
+            return
         }
+        #expect(strValue == "hello")
         
-        if case .number(let value) = args[1] {
-            XCTAssertEqual(value, 42.0)
-        } else {
-            XCTFail("Expected number")
+        guard case .number(let numValue) = args[1] else {
+            Issue.record("Expected number")
+            return
         }
+        #expect(numValue == 42.0)
         
-        if case .bool(let value) = args[2] {
-            XCTAssertTrue(value)
-        } else {
-            XCTFail("Expected bool")
+        guard case .bool(let boolValue) = args[2] else {
+            Issue.record("Expected bool")
+            return
         }
+        #expect(boolValue == true)
         
-        XCTAssertEqual(args[3], .null)
+        #expect(args[3] == .null)
     }
     
-    func testParseNestedBloks() throws {
+    @Test func parseNestedBloks() throws {
         let parser = BloksParser()
         let payload = """
         (bk.action.map.Make,
@@ -72,188 +73,188 @@ final class BloksParserTests: XCTestCase {
         
         let result = try parser.parse(payload)
         
-        XCTAssertEqual(result.blokName, "bk.action.map.Make")
-        XCTAssertEqual(result.blokArgs?.count, 2)
+        #expect(result.blokName == "bk.action.map.Make")
+        #expect(result.blokArgs?.count == 2)
         
         guard let args = result.blokArgs else {
-            XCTFail("Expected args")
+            Issue.record("Expected args")
             return
         }
         
         // First nested blok
-        XCTAssertEqual(args[0].blokName, "bk.action.array.Make")
-        XCTAssertEqual(args[0].blokArgs?.count, 2)
+        #expect(args[0].blokName == "bk.action.array.Make")
+        #expect(args[0].blokArgs?.count == 2)
         
         // Second nested blok
-        XCTAssertEqual(args[1].blokName, "bk.action.array.Make")
-        XCTAssertEqual(args[1].blokArgs?.count, 2)
+        #expect(args[1].blokName == "bk.action.array.Make")
+        #expect(args[1].blokArgs?.count == 2)
     }
     
-    func testParseLocalBlok() throws {
+    @Test func parseLocalBlok() throws {
         let parser = BloksParser()
         let result = try parser.parse("(#local-tag-123)")
         
-        XCTAssertEqual(result.blokName, "local-tag-123")
-        XCTAssertTrue(result.isLocalBlok)
+        #expect(result.blokName == "local-tag-123")
+        #expect(result.isLocalBlok == true)
     }
     
-    func testParseLocalBlokWithColons() throws {
+    @Test func parseLocalBlokWithColons() throws {
         let parser = BloksParser()
         let result = try parser.parse("(#some:local:tag, 42)")
         
-        XCTAssertEqual(result.blokName, "some:local:tag")
-        XCTAssertTrue(result.isLocalBlok)
-        XCTAssertEqual(result.blokArgs?.count, 1)
+        #expect(result.blokName == "some:local:tag")
+        #expect(result.isLocalBlok == true)
+        #expect(result.blokArgs?.count == 1)
     }
     
     // MARK: - Number Parsing Tests
     
-    func testParseInteger() throws {
+    @Test func parseInteger() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, 42069)")
         
-        if case .number(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, 42069.0)
-        } else {
-            XCTFail("Expected number")
+        guard case .number(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected number")
+            return
         }
+        #expect(value == 42069.0)
     }
     
-    func testParseNegativeNumber() throws {
+    @Test func parseNegativeNumber() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, -123)")
         
-        if case .number(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, -123.0)
-        } else {
-            XCTFail("Expected number")
+        guard case .number(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected number")
+            return
         }
+        #expect(value == -123.0)
     }
     
-    func testParseDecimalNumber() throws {
+    @Test func parseDecimalNumber() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, 3.14159)")
         
-        if case .number(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, 3.14159, accuracy: 0.00001)
-        } else {
-            XCTFail("Expected number")
+        guard case .number(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected number")
+            return
         }
+        #expect(abs(value - 3.14159) < 0.00001)
     }
     
-    func testParseScientificNotation() throws {
+    @Test func parseScientificNotation() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, 1.5e10)")
         
-        if case .number(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, 1.5e10, accuracy: 1.0)
-        } else {
-            XCTFail("Expected number")
+        guard case .number(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected number")
+            return
         }
+        #expect(abs(value - 1.5e10) < 1.0)
     }
     
-    func testParseNegativeExponent() throws {
+    @Test func parseNegativeExponent() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, 1.5e-5)")
         
-        if case .number(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, 1.5e-5, accuracy: 0.0000001)
-        } else {
-            XCTFail("Expected number")
+        guard case .number(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected number")
+            return
         }
+        #expect(abs(value - 1.5e-5) < 0.0000001)
     }
     
     // MARK: - String Parsing Tests
     
-    func testParseStringWithEscapes() throws {
+    @Test func parseStringWithEscapes() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(test, "hello\nworld")"#)
         
-        if case .string(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, "hello\nworld")
-        } else {
-            XCTFail("Expected string")
+        guard case .string(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected string")
+            return
         }
+        #expect(value == "hello\nworld")
     }
     
-    func testParseStringWithUnicode() throws {
+    @Test func parseStringWithUnicode() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(test, "hello\u0020world")"#)
         
-        if case .string(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, "hello world")
-        } else {
-            XCTFail("Expected string")
+        guard case .string(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected string")
+            return
         }
+        #expect(value == "hello world")
     }
     
-    func testParseStringWithEscapedQuotes() throws {
+    @Test func parseStringWithEscapedQuotes() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(test, "say \"hello\"")"#)
         
-        if case .string(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, #"say "hello""#)
-        } else {
-            XCTFail("Expected string")
+        guard case .string(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected string")
+            return
         }
+        #expect(value == #"say "hello""#)
     }
     
-    func testParseStringWithBackslash() throws {
+    @Test func parseStringWithBackslash() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(test, "path\\to\\file")"#)
         
-        if case .string(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, #"path\to\file"#)
-        } else {
-            XCTFail("Expected string")
+        guard case .string(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected string")
+            return
         }
+        #expect(value == #"path\to\file"#)
     }
     
-    func testParseStringWithAllEscapes() throws {
+    @Test func parseStringWithAllEscapes() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(test, "\b\f\r\t\n")"#)
         
-        if case .string(let value) = result.blokArgs?[0] {
-            XCTAssertEqual(value, "\u{08}\u{0C}\r\t\n")
-        } else {
-            XCTFail("Expected string")
+        guard case .string(let value) = result.blokArgs?[0] else {
+            Issue.record("Expected string")
+            return
         }
+        #expect(value == "\u{08}\u{0C}\r\t\n")
     }
     
     // MARK: - Boolean and Null Tests
     
-    func testParseTrue() throws {
+    @Test func parseTrue() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, true)")
         
-        XCTAssertEqual(result.blokArgs?[0], .bool(true))
+        #expect(result.blokArgs?[0] == .bool(true))
     }
     
-    func testParseFalse() throws {
+    @Test func parseFalse() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, false)")
         
-        XCTAssertEqual(result.blokArgs?[0], .bool(false))
+        #expect(result.blokArgs?[0] == .bool(false))
     }
     
-    func testParseNull() throws {
+    @Test func parseNull() throws {
         let parser = BloksParser()
         let result = try parser.parse("(test, null)")
         
-        XCTAssertEqual(result.blokArgs?[0], .null)
+        #expect(result.blokArgs?[0] == .null)
     }
     
     // MARK: - Whitespace Handling Tests
     
-    func testParseWithMinimalWhitespace() throws {
+    @Test func parseWithMinimalWhitespace() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(bk.action.array.Make,"a","b","c")"#)
         
-        XCTAssertEqual(result.blokName, "bk.action.array.Make")
-        XCTAssertEqual(result.blokArgs?.count, 3)
+        #expect(result.blokName == "bk.action.array.Make")
+        #expect(result.blokArgs?.count == 3)
     }
     
-    func testParseWithExtraWhitespace() throws {
+    @Test func parseWithExtraWhitespace() throws {
         let parser = BloksParser()
         let result = try parser.parse("""
         
@@ -264,13 +265,13 @@ final class BloksParserTests: XCTestCase {
         
         """)
         
-        XCTAssertEqual(result.blokName, "bk.action.test")
-        XCTAssertEqual(result.blokArgs?.count, 2)
+        #expect(result.blokName == "bk.action.test")
+        #expect(result.blokArgs?.count == 2)
     }
     
     // MARK: - Custom Processor Tests
     
-    func testCustomProcessor() throws {
+    @Test func customProcessor() throws {
         let processors: [String: BlokProcessor] = [
             "bk.action.array.Make": { _, args, _ in
                 .blok(name: "array", args: args, isLocal: false)
@@ -286,13 +287,13 @@ final class BloksParserTests: XCTestCase {
         let parser = BloksParser(processors: processors)
         let result = try parser.parse("(bk.action.array.Make, (bk.action.i32.Const, 42), (bk.action.i32.Const, 69))")
         
-        XCTAssertEqual(result.blokName, "array")
-        XCTAssertEqual(result.blokArgs?.count, 2)
-        XCTAssertEqual(result.blokArgs?[0], .number(42))
-        XCTAssertEqual(result.blokArgs?[1], .number(69))
+        #expect(result.blokName == "array")
+        #expect(result.blokArgs?.count == 2)
+        #expect(result.blokArgs?[0] == .number(42))
+        #expect(result.blokArgs?[1] == .number(69))
     }
     
-    func testFallbackProcessor() throws {
+    @Test func fallbackProcessor() throws {
         nonisolated(unsafe) var unknownBloks: [String] = []
         
         let processors: [String: BlokProcessor] = [
@@ -305,65 +306,65 @@ final class BloksParserTests: XCTestCase {
         let parser = BloksParser(processors: processors)
         _ = try parser.parse("(bk.unknown.type, 42)")
         
-        XCTAssertEqual(unknownBloks, ["bk.unknown.type"])
+        #expect(unknownBloks == ["bk.unknown.type"])
     }
     
-    func testBasicProcessors() throws {
+    @Test func basicProcessors() throws {
         let parser = BloksParser.withBasicProcessors()
         let payload = #"(bk.action.array.Make, (bk.action.i32.Const, 42), "hello", (bk.action.bool.Const, true))"#
         
         let result = try parser.parse(payload)
         
-        XCTAssertEqual(result.blokName, "array")
-        XCTAssertEqual(result.blokArgs?.count, 3)
-        XCTAssertEqual(result.blokArgs?[0], .number(42))
-        XCTAssertEqual(result.blokArgs?[1], .string("hello"))
-        XCTAssertEqual(result.blokArgs?[2], .bool(true))
+        #expect(result.blokName == "array")
+        #expect(result.blokArgs?.count == 3)
+        #expect(result.blokArgs?[0] == .number(42))
+        #expect(result.blokArgs?[1] == .string("hello"))
+        #expect(result.blokArgs?[2] == .bool(true))
     }
     
     // MARK: - JSON Conversion Tests
     
-    func testToJSON() throws {
+    @Test func toJSON() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(bk.action.test, "hello", 42, true, null)"#)
         
         let json = result.toJSON() as! [Any]
         
-        XCTAssertEqual(json[0] as? String, "bk.action.test")
-        XCTAssertEqual(json[1] as? String, "hello")
-        XCTAssertEqual(json[2] as? Double, 42.0)
-        XCTAssertEqual(json[3] as? Bool, true)
-        XCTAssertTrue(json[4] is NSNull)
+        #expect(json[0] as? String == "bk.action.test")
+        #expect(json[1] as? String == "hello")
+        #expect(json[2] as? Double == 42.0)
+        #expect(json[3] as? Bool == true)
+        #expect(json[4] is NSNull)
     }
     
-    func testToJSONString() throws {
+    @Test func toJSONString() throws {
         let parser = BloksParser()
         let result = try parser.parse(#"(bk.action.test, "hello")"#)
         
         let jsonString = try result.toJSONString()
-        XCTAssertTrue(jsonString.contains("bk.action.test"))
-        XCTAssertTrue(jsonString.contains("hello"))
+        #expect(jsonString.contains("bk.action.test"))
+        #expect(jsonString.contains("hello"))
     }
     
     // MARK: - Convenience Function Tests
     
-    func testCreateBloksParser() throws {
+    @Test func testCreateBloksParser() throws {
         let parse = createBloksParser()
         let result = try parse("(test, 42)")
         
-        XCTAssertEqual(result.blokName, "test")
+        #expect(result.blokName == "test")
     }
     
-    func testCreateBloksParserWithBasics() throws {
+    @Test func testCreateBloksParserWithBasics() throws {
         let parse = createBloksParserWithBasics()
         let result = try parse("(bk.action.i32.Const, 42)")
         
-        XCTAssertEqual(result, .number(42))
+        #expect(result == .number(42))
     }
     
     // MARK: - Complex Payload Tests
     
-    func testComplexPayload() throws {
+    @Test func complexPayload() throws {
         let parser = BloksParser.withBasicProcessors()
         let payload = """
         (bk.action.array.Make,
@@ -383,70 +384,70 @@ final class BloksParserTests: XCTestCase {
         
         let result = try parser.parse(payload)
         
-        XCTAssertEqual(result.blokName, "array")
-        XCTAssertEqual(result.blokArgs?.count, 4)
-        XCTAssertEqual(result.blokArgs?[0], .number(42069))
-        XCTAssertEqual(result.blokArgs?[1], .string("nice"))
-        XCTAssertEqual(result.blokArgs?[2], .bool(true))
-        XCTAssertEqual(result.blokArgs?[3].blokName, "map")
+        #expect(result.blokName == "array")
+        #expect(result.blokArgs?.count == 4)
+        #expect(result.blokArgs?[0] == .number(42069))
+        #expect(result.blokArgs?[1] == .string("nice"))
+        #expect(result.blokArgs?[2] == .bool(true))
+        #expect(result.blokArgs?[3].blokName == "map")
     }
     
     // MARK: - Error Handling Tests
     
-    func testUnterminatedString() {
+    @Test func unterminatedString() {
         let parser = BloksParser()
         
-        XCTAssertThrowsError(try parser.parse(#"(test, "hello)"#)) { error in
-            XCTAssertTrue(error is BloksParserError)
+        #expect(throws: BloksParserError.self) {
+            try parser.parse(#"(test, "hello)"#)
         }
     }
     
-    func testMissingClosingParen() {
+    @Test func missingClosingParen() {
         let parser = BloksParser()
         
-        XCTAssertThrowsError(try parser.parse("(test, 42")) { error in
-            XCTAssertTrue(error is BloksParserError)
+        #expect(throws: BloksParserError.self) {
+            try parser.parse("(test, 42")
         }
     }
     
-    func testUnexpectedCharacter() {
+    @Test func unexpectedCharacter() {
         let parser = BloksParser()
         
-        XCTAssertThrowsError(try parser.parse("(test, @invalid)")) { error in
-            XCTAssertTrue(error is BloksParserError)
+        #expect(throws: BloksParserError.self) {
+            try parser.parse("(test, @invalid)")
         }
     }
     
-    func testEmptyInput() {
+    @Test func emptyInput() {
         let parser = BloksParser()
         
-        XCTAssertThrowsError(try parser.parse("")) { error in
-            XCTAssertTrue(error is BloksParserError)
+        #expect(throws: BloksParserError.self) {
+            try parser.parse("")
         }
     }
     
-    func testTrailingContent() {
+    @Test func trailingContent() {
         let parser = BloksParser()
         
-        XCTAssertThrowsError(try parser.parse("(test)extra")) { error in
-            XCTAssertTrue(error is BloksParserError)
+        #expect(throws: BloksParserError.self) {
+            try parser.parse("(test)extra")
         }
     }
     
     // MARK: - Description Tests
     
-    func testBloksValueDescription() throws {
-        XCTAssertEqual(BloksValue.null.description, "null")
-        XCTAssertEqual(BloksValue.bool(true).description, "true")
-        XCTAssertEqual(BloksValue.bool(false).description, "false")
-        XCTAssertEqual(BloksValue.number(42).description, "42")
-        XCTAssertEqual(BloksValue.number(3.14).description, "3.14")
-        XCTAssertEqual(BloksValue.string("hello").description, "\"hello\"")
+    @Test func bloksValueDescription() {
+        #expect(BloksValue.null.description == "null")
+        #expect(BloksValue.bool(true).description == "true")
+        #expect(BloksValue.bool(false).description == "false")
+        #expect(BloksValue.number(42).description == "42")
+        #expect(BloksValue.number(3.14).description == "3.14")
+        #expect(BloksValue.string("hello").description == "\"hello\"")
     }
     
     // MARK: - Real-World Example Tests
     
-    func testInstagramLoginPayload() throws {
+    @Test func instagramLoginPayload() throws {
         let parser = BloksParser()
         let payload = """
         (bk.action.map.Make,
@@ -458,8 +459,8 @@ final class BloksParserTests: XCTestCase {
         let result = try parser.parse(payload)
         let json = try result.toJSONString(prettyPrinted: true)
         
-        XCTAssertTrue(json.contains("bk.action.map.Make"))
-        XCTAssertTrue(json.contains("login_type"))
-        XCTAssertTrue(json.contains("Password"))
+        #expect(json.contains("bk.action.map.Make"))
+        #expect(json.contains("login_type"))
+        #expect(json.contains("Password"))
     }
 }

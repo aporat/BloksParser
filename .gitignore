@@ -1,0 +1,49 @@
+# Xcode
+# Build products and user-specific files
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/
+DerivedData/
+build/
+.build/
+
+# Xcode temporary files
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+*.playground
+*.moved-aside
+
+# Xcode test results
+TestResults.xcresult
+*.xcresult
+
+# Coverage and test output files
+coverage/
+test-results.xml
+
+# Swift Package Manager
+.swiftpm/
+Packages/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Ruby/Gem dependencies (from slather)
+Gemfile.lock
+vendor/
+.bundle/
+
+# macOS
+.DS_Store
+
+# GitHub Actions
+*.log
+*.tmp
+
+# Miscellaneous
+*.swp
+*.swo
+*~
